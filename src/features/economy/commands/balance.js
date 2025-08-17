@@ -1,5 +1,5 @@
-// src/features/economy/commands/balance.js - FIXED: Correct import paths
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+// src/features/economy/commands/balance.js - FIXED: Complete implementation with proper safety checks
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const EconomyService = require('../app/EconomyService');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
@@ -17,19 +17,66 @@ module.exports = {
     cooldown: 3,
     
     async execute(interaction) {
+        // CRITICAL: Validate interaction and user first
+        if (!interaction) {
+            console.error('CRITICAL: Interaction is undefined');
+            return;
+        }
+        
+        if (!interaction.user) {
+            console.error('CRITICAL: interaction.user is undefined', {
+                interactionId: interaction.id,
+                type: interaction.type,
+                commandName: interaction.commandName
+            });
+            
+            try {
+                await interaction.reply({
+                    content: '❌ User identification failed. Please try the command again.',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (error) {
+                console.error('Failed to send error response:', error);
+            }
+            return;
+        }
+        
+        // Safe user extraction
         const targetUser = interaction.options.getUser('user') || interaction.user;
+        
+        // Additional safety check for targetUser
+        if (!targetUser || !targetUser.id) {
+            console.error('CRITICAL: targetUser is invalid', {
+                targetUser,
+                hasUser: !!interaction.user,
+                optionsUser: interaction.options.getUser('user')
+            });
+            
+            try {
+                await interaction.reply({
+                    content: '❌ Unable to identify the target user. Please try again.',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (error) {
+                console.error('Failed to send error response:', error);
+            }
+            return;
+        }
+        
         const userId = targetUser.id;
+        const username = targetUser.username || 'Unknown';
+        const guildId = interaction.guildId || interaction.guild?.id || null;
         
         try {
             // Ensure user exists
-            await DatabaseManager.ensureUser(userId, targetUser.username, interaction.guildId);
+            await DatabaseManager.ensureUser(userId, username, guildId);
             
             // Get user data
             const user = await DatabaseManager.getUser(userId);
             if (!user) {
                 return interaction.reply({
                     content: '❌ User not found! They need to use a command first.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
             
@@ -115,10 +162,10 @@ module.exports = {
             await interaction.reply({ embeds: [embed] });
             
         } catch (error) {
-            interaction.client.logger.error('Balance command error:', error);
+            interaction.client.logger?.error('Balance command error:', error);
             await interaction.reply({
                 content: '❌ An error occurred while checking the balance.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     }
