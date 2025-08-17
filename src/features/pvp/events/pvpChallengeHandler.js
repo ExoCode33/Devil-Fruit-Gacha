@@ -32,7 +32,6 @@ module.exports = {
       const raidId = parts[2] || null;
 
       if (action === 'accept') {
-        // (Placeholder) load raid from DB and mark accepted
         try {
           if (pool?.query) {
             await pool.query('UPDATE raids SET accepted = true WHERE id = $1', [raidId]);
@@ -48,7 +47,6 @@ module.exports = {
         return;
       }
 
-      // Fallback action
       try { await interaction.reply({ content: '🤔 Unknown PvP action.', ephemeral: true }); } catch {}
     } catch (err) {
       logger.error?.('pvpChallengeHandler error:', err) || console.error('pvpChallengeHandler error:', err);
