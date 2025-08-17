@@ -1,4 +1,4 @@
-// src/features/gacha/commands/summon.js - FINAL FIXED: Complete implementation handling wrapped interactions
+// src/features/gacha/commands/summon.js - FIXED: Complete implementation
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const GachaService = require('../app/GachaService');
 const EconomyService = require('../../economy/app/EconomyService');
@@ -7,8 +7,24 @@ const Constants = require('../../../shared/constants/Constants');
 
 // Use Constants for values
 const PULL_COST = Constants.PULL_COST || 1000;
-const RARITY_COLORS = Constants.RARITY_COLORS;
-const RARITY_EMOJIS = Constants.RARITY_EMOJIS;
+const RARITY_COLORS = Constants.RARITY_COLORS || {
+    common: 0x808080,
+    uncommon: 0x00FF00,
+    rare: 0x0080FF,
+    epic: 0x8000FF,
+    legendary: 0xFFD700,
+    mythical: 0xFF8000,
+    divine: 0xFF0000
+};
+const RARITY_EMOJIS = Constants.RARITY_EMOJIS || {
+    common: '⚪',
+    uncommon: '🟢',
+    rare: '🔵',
+    epic: '🟣',
+    legendary: '🟡',
+    mythical: '🟠',
+    divine: '🔴'
+};
 
 // Try to import Devil Fruits data
 let DEVIL_FRUITS = {};
@@ -25,63 +41,42 @@ const ANIMATION_CONFIG = {
     RAINBOW_DELAY: 300
 };
 
-// FINAL VALIDATION FUNCTIONS - HANDLES WRAPPED INTERACTIONS
+// VALIDATION FUNCTIONS
 function validateInteraction(interactionWrapper) {
-    // Level 0: Check if we have a wrapper object
     if (!interactionWrapper) {
         console.error('EMERGENCY: InteractionWrapper is null/undefined');
         return { valid: false, reason: 'null_wrapper', interaction: null };
     }
     
-    // Level 1: Extract actual interaction from wrapper
     let interaction = interactionWrapper;
     
-    // Check if this is a wrapped interaction (from CommandManager)
     if (interactionWrapper.interaction && typeof interactionWrapper.interaction === 'object') {
         interaction = interactionWrapper.interaction;
         console.log('DETECTED: Wrapped interaction from CommandManager');
     }
     
-    // Level 2: Check if interaction exists
     if (!interaction) {
         console.error('EMERGENCY: Interaction is null/undefined after unwrapping');
         return { valid: false, reason: 'null_interaction', interaction: null };
     }
     
-    // Level 3: Check if interaction has basic structure
     if (typeof interaction !== 'object') {
         console.error('EMERGENCY: Interaction is not an object', { type: typeof interaction });
         return { valid: false, reason: 'invalid_type', interaction: null };
     }
     
-    // Level 4: Check if interaction has reply function
     if (typeof interaction.reply !== 'function') {
-        console.error('EMERGENCY: Interaction missing reply function', {
-            hasReply: !!interaction.reply,
-            hasUser: !!interaction.user,
-            hasId: !!interaction.id,
-            keys: Object.keys(interaction)
-        });
+        console.error('EMERGENCY: Interaction missing reply function');
         return { valid: false, reason: 'missing_reply', interaction: null };
     }
     
-    // Level 5: Check if interaction has user
     if (!interaction.user) {
-        console.error('EMERGENCY: Interaction missing user', {
-            id: interaction.id,
-            type: interaction.type,
-            commandName: interaction.commandName,
-            hasUser: !!interaction.user
-        });
+        console.error('EMERGENCY: Interaction missing user');
         return { valid: false, reason: 'missing_user', interaction: null };
     }
     
-    // Level 6: Check if user has id
     if (!interaction.user.id) {
-        console.error('EMERGENCY: User missing id', {
-            user: interaction.user,
-            userId: interaction.user.id
-        });
+        console.error('EMERGENCY: User missing id');
         return { valid: false, reason: 'missing_user_id', interaction: null };
     }
     
@@ -92,10 +87,9 @@ async function emergencySafeReply(interaction, content, ephemeral = true) {
     try {
         const options = {
             content: content,
-            flags: ephemeral ? 64 : undefined // MessageFlags.Ephemeral = 64
+            flags: ephemeral ? 64 : undefined
         };
         
-        // Try multiple reply methods in order of preference
         if (typeof interaction.reply === 'function') {
             await interaction.reply(options);
             return true;
@@ -165,14 +159,12 @@ class SummonAnimator {
     }
 
     static createResultSummary(fruits, results, balance, pityInfo, pityUsedInSession) {
-        // Count rarities
         const rarityCounts = {};
         fruits.forEach(fruit => {
             const rarity = fruit.rarity || 'common';
             rarityCounts[rarity] = (rarityCounts[rarity] || 0) + 1;
         });
 
-        // Find highest rarity for color
         const rarityPriority = {
             'common': 1, 'uncommon': 2, 'rare': 3, 'epic': 4,
             'legendary': 5, 'mythical': 6, 'divine': 7
@@ -189,10 +181,8 @@ class SummonAnimator {
             }
         });
 
-        // Build description
         let description = `🎉 **Summoning Complete!** 🎉\n\n`;
         
-        // Add fruits list
         fruits.forEach((fruit, index) => {
             const result = results[index] || {};
             const rarityEmoji = this.getRaritySquare(fruit.rarity);
@@ -203,7 +193,6 @@ class SummonAnimator {
             description += `      📊 ${statusText} | 🔮 ${fruit.type} | 💪 x${fruit.multiplier.toFixed(1)}\n\n`;
         });
 
-        // Add rarity summary
         description += `📊 **Rarity Summary:**\n`;
         Object.entries(rarityCounts).forEach(([rarity, count]) => {
             const emoji = this.getRaritySquare(rarity);
@@ -241,35 +230,28 @@ module.exports = {
     cooldown: 5,
     
     async execute(interactionWrapper) {
-        // FINAL: Complete interaction validation with wrapper handling
         const validation = validateInteraction(interactionWrapper);
         if (!validation.valid) {
             console.error(`EMERGENCY: Invalid interaction - ${validation.reason}`);
             
-            // Try to send error response only if we have basic interaction structure
             if (validation.interaction && validation.reason !== 'null_wrapper' && validation.reason !== 'null_interaction') {
                 await emergencySafeReply(validation.interaction, '❌ System error: Invalid interaction. Please try again.', true);
             }
             return;
         }
         
-        // Extract the actual interaction
         const interaction = validation.interaction;
         
-        // Safe user ID extraction (now guaranteed to exist)
         const userId = interaction.user.id;
         const username = interaction.user.username || 'Unknown';
         const guildId = interaction.guildId || interaction.guild?.id || null;
         
         try {
-            // Ensure user exists
             await DatabaseManager.ensureUser(userId, username, guildId);
             
-            // Get user's current balance and pity info
             const balance = await EconomyService.getBalance(userId);
             const pityInfo = await GachaService.getPityInfo(userId);
             
-            // Create the main summon menu
             const menuEmbed = await this.createSummonMenu(balance, pityInfo);
             const menuComponents = await this.createSummonComponents(userId);
             
@@ -278,7 +260,6 @@ module.exports = {
                 components: menuComponents 
             });
             
-            // Setup collector for menu interactions
             await this.setupMenuCollector(interaction);
             
         } catch (error) {
@@ -305,18 +286,13 @@ module.exports = {
         }
     },
 
-    /**
-     * Create the main summon menu embed
-     */
     async createSummonMenu(balance, pityInfo) {
-        // Calculate costs
         const costs = {
             single: PULL_COST,
             ten: PULL_COST * 10,
             hundred: PULL_COST * 100
         };
         
-        // Check affordability
         const canAfford = {
             single: balance >= costs.single,
             ten: balance >= costs.ten,
@@ -359,13 +335,9 @@ module.exports = {
         return embed;
     },
 
-    /**
-     * Create the summon menu components
-     */
     async createSummonComponents(userId) {
         const balance = await EconomyService.getBalance(userId);
         
-        // Calculate costs and affordability
         const costs = {
             single: PULL_COST,
             ten: PULL_COST * 10,
@@ -380,7 +352,6 @@ module.exports = {
         
         const components = [];
         
-        // Amount selection dropdown
         const amountOptions = [];
         
         if (canAfford.single) {
@@ -410,7 +381,6 @@ module.exports = {
             });
         }
         
-        // Only show dropdown if user can afford at least one option
         if (amountOptions.length > 0) {
             const amountSelectMenu = new StringSelectMenuBuilder()
                 .setCustomId(`summon_amount_${userId}`)
@@ -419,7 +389,6 @@ module.exports = {
             
             components.push(new ActionRowBuilder().addComponents(amountSelectMenu));
             
-            // Animation toggle dropdown
             const animationSelectMenu = new StringSelectMenuBuilder()
                 .setCustomId(`summon_animation_${userId}`)
                 .setPlaceholder('🎬 Choose animation preference...')
@@ -440,14 +409,13 @@ module.exports = {
             
             components.push(new ActionRowBuilder().addComponents(animationSelectMenu));
             
-            // Summon button (initially disabled)
             const summonButton = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
                         .setCustomId(`summon_execute_${userId}`)
                         .setLabel('🚀 Start Summoning!')
                         .setStyle(ButtonStyle.Primary)
-                        .setDisabled(true), // Disabled until selections are made
+                        .setDisabled(true),
                     new ButtonBuilder()
                         .setCustomId(`summon_cancel_${userId}`)
                         .setLabel('❌ Cancel')
@@ -456,7 +424,6 @@ module.exports = {
             
             components.push(summonButton);
         } else {
-            // User can't afford any summons
             const insufficientButton = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
@@ -476,31 +443,25 @@ module.exports = {
         return components;
     },
 
-    /**
-     * Setup menu collector for interactions
-     */
     async setupMenuCollector(interaction) {
         const message = await interaction.fetchReply();
         const userId = interaction.user.id;
         
-        // Store user's selections
         const userSelections = new Map();
         
         const collector = message.createMessageComponentCollector({ 
-            time: 300000, // 5 minutes
+            time: 300000,
             filter: (i) => i.user?.id === userId
         });
         
         collector.on('collect', async (i) => {
             try {
-                // Validate sub-interaction (raw interaction, not wrapped)
                 const validation = validateInteraction(i);
                 if (!validation.valid) {
                     console.error(`Sub-interaction invalid: ${validation.reason}`);
                     return;
                 }
                 
-                // Use the validated interaction
                 const subInteraction = validation.interaction;
                 
                 if (subInteraction.customId.startsWith('summon_amount_')) {
@@ -524,7 +485,6 @@ module.exports = {
         
         collector.on('end', async () => {
             try {
-                // Disable all components when collector expires
                 const disabledComponents = await this.createDisabledComponents(userId);
                 await interaction.editReply({ 
                     components: disabledComponents 
@@ -535,9 +495,6 @@ module.exports = {
         });
     },
 
-    /**
-     * Handle amount selection
-     */
     async handleAmountSelection(interaction, userSelections) {
         const selectedAmount = parseInt(interaction.values[0]);
         userSelections.set(interaction.user.id, {
@@ -553,9 +510,6 @@ module.exports = {
         });
     },
 
-    /**
-     * Handle animation selection
-     */
     async handleAnimationSelection(interaction, userSelections) {
         const selectedAnimation = interaction.values[0];
         userSelections.set(interaction.user.id, {
@@ -571,9 +525,6 @@ module.exports = {
         });
     },
 
-    /**
-     * Handle summon execution
-     */
     async handleSummonExecution(interaction, userSelections) {
         const userId = interaction.user.id;
         const selections = userSelections.get(userId);
@@ -587,7 +538,6 @@ module.exports = {
         const skipAnimation = selections.animation === 'skip';
         const cost = PULL_COST * amount;
         
-        // Final balance check
         const balance = await EconomyService.getBalance(userId);
         if (balance < cost) {
             await interaction.update({
@@ -598,14 +548,11 @@ module.exports = {
             return;
         }
         
-        // Deduct berries and start summoning
         await EconomyService.deductBerries(userId, cost, 'gacha_summon');
         const newBalance = balance - cost;
         
-        // Defer the update for longer operation
         await interaction.deferUpdate();
         
-        // Execute the appropriate summon type
         if (amount === 1) {
             await this.runSingleSummon(interaction, newBalance, skipAnimation);
         } else if (amount <= 10) {
@@ -615,9 +562,6 @@ module.exports = {
         }
     },
 
-    /**
-     * Handle summon cancel
-     */
     async handleSummonCancel(interaction) {
         const cancelEmbed = new EmbedBuilder()
             .setColor(RARITY_COLORS.common)
@@ -632,9 +576,6 @@ module.exports = {
         });
     },
 
-    /**
-     * Handle income check
-     */
     async handleIncomeCheck(interaction) {
         const incomeEmbed = new EmbedBuilder()
             .setColor(RARITY_COLORS.uncommon)
@@ -665,9 +606,6 @@ module.exports = {
         });
     },
 
-    /**
-     * Create updated embed with selections
-     */
     async createUpdatedEmbed(interaction, userSelections, statusText) {
         const userId = interaction.user.id;
         const balance = await EconomyService.getBalance(userId);
@@ -696,7 +634,6 @@ module.exports = {
                 }
             );
         
-        // Show selected options
         if (selections.amount) {
             const cost = PULL_COST * selections.amount;
             embed.addFields({
@@ -721,14 +658,10 @@ module.exports = {
         return embed;
     },
 
-    /**
-     * Create updated components based on selections
-     */
     async createUpdatedComponents(userId, userSelections) {
         const balance = await EconomyService.getBalance(userId);
         const selections = userSelections.get(userId) || {};
         
-        // Calculate costs and affordability
         const costs = {
             single: PULL_COST,
             ten: PULL_COST * 10,
@@ -743,7 +676,6 @@ module.exports = {
         
         const components = [];
         
-        // Amount selection dropdown
         const amountOptions = [];
         
         if (canAfford.single) {
@@ -785,7 +717,6 @@ module.exports = {
             components.push(new ActionRowBuilder().addComponents(amountSelectMenu));
         }
         
-        // Animation selection dropdown
         const animationSelectMenu = new StringSelectMenuBuilder()
             .setCustomId(`summon_animation_${userId}`)
             .setPlaceholder(selections.animation ? 
@@ -803,3 +734,220 @@ module.exports = {
                     label: 'Skip Animation',
                     description: 'Show results immediately',
                     value: 'skip',
+                    emoji: '⚡',
+                    default: selections.animation === 'skip'
+                }
+            ]);
+        
+        components.push(new ActionRowBuilder().addComponents(animationSelectMenu));
+        
+        const canExecute = selections.amount && selections.animation;
+        
+        const summonButton = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`summon_execute_${userId}`)
+                    .setLabel('🚀 Start Summoning!')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(!canExecute),
+                new ButtonBuilder()
+                    .setCustomId(`summon_cancel_${userId}`)
+                    .setLabel('❌ Cancel')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+        
+        components.push(summonButton);
+        
+        return components;
+    },
+
+    async createDisabledComponents(userId) {
+        const disabledButton = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`summon_expired_${userId}`)
+                    .setLabel('🕐 Menu Expired')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true)
+            );
+        
+        return [disabledButton];
+    },
+
+    async runSingleSummon(interaction, balance, skipAnimation) {
+        const userId = interaction.user.id;
+        
+        try {
+            const pullResult = await GachaService.performPulls(userId, 1);
+            
+            if (!pullResult.success || !pullResult.results || pullResult.results.length === 0) {
+                await interaction.editReply({
+                    content: '❌ Failed to perform summon!',
+                    components: []
+                });
+                return;
+            }
+            
+            const result = pullResult.results[0];
+            const fruit = result.fruit;
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🍈 Devil Fruit Summoned!')
+                .setColor(RARITY_COLORS[fruit.rarity] || RARITY_COLORS.common)
+                .setDescription(`${RARITY_EMOJIS[fruit.rarity] || '⚪'} **${fruit.name}** (${fruit.rarity.charAt(0).toUpperCase() + fruit.rarity.slice(1)})`)
+                .addFields(
+                    {
+                        name: '📊 Fruit Information',
+                        value: [
+                            `✨ **Status:** ${result.isNewFruit ? 'New Addition!' : `Total Owned: ${result.duplicateCount || 1}`}`,
+                            `🔮 **Type:** ${fruit.type}`,
+                            `💪 **CP:** ${Math.floor(fruit.total_cp || 100).toLocaleString()}`
+                        ].join('\n'),
+                        inline: true
+                    },
+                    {
+                        name: '💰 Your Balance',
+                        value: `**${balance.toLocaleString()} Berries** 🍓`,
+                        inline: true
+                    },
+                    {
+                        name: '📝 Description',
+                        value: fruit.description || 'A mysterious Devil Fruit power',
+                        inline: false
+                    }
+                )
+                .setFooter({ text: '🏴‍☠️ Your journey on the Grand Line continues!' })
+                .setTimestamp();
+
+            await interaction.editReply({
+                embeds: [embed],
+                components: []
+            });
+
+        } catch (error) {
+            console.error('Single summon error:', error);
+            await interaction.editReply({
+                content: '❌ An error occurred during summoning!',
+                components: []
+            });
+        }
+    },
+
+    async runMultiSummon(interaction, balance, amount, skipAnimation) {
+        const userId = interaction.user.id;
+        
+        try {
+            if (!skipAnimation) {
+                // Show loading animation
+                for (let i = 1; i <= amount; i++) {
+                    const loadingEmbed = SummonAnimator.createSimpleLoadingFrame(i, amount);
+                    await interaction.editReply({
+                        embeds: [loadingEmbed],
+                        components: []
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                }
+            }
+
+            const pullResult = await GachaService.performPulls(userId, amount);
+            
+            if (!pullResult.success || !pullResult.results || pullResult.results.length === 0) {
+                await interaction.editReply({
+                    content: '❌ Failed to perform summons!',
+                    components: []
+                });
+                return;
+            }
+
+            const pityInfo = await GachaService.getPityInfo(userId);
+            const resultEmbed = SummonAnimator.createResultSummary(
+                pullResult.results.map(r => r.fruit),
+                pullResult.results,
+                balance,
+                pityInfo,
+                pullResult.pityUsedInSession
+            );
+
+            await interaction.editReply({
+                embeds: [resultEmbed],
+                components: []
+            });
+
+        } catch (error) {
+            console.error('Multi summon error:', error);
+            await interaction.editReply({
+                content: '❌ An error occurred during summoning!',
+                components: []
+            });
+        }
+    },
+
+    async runMegaSummon(interaction, balance, amount, skipAnimation) {
+        const userId = interaction.user.id;
+        
+        try {
+            const batchSize = 10;
+            const batches = Math.ceil(amount / batchSize);
+            const allResults = [];
+
+            for (let batch = 1; batch <= batches; batch++) {
+                const currentBatchSize = Math.min(batchSize, amount - (batch - 1) * batchSize);
+                
+                if (!skipAnimation) {
+                    // Show batch loading
+                    const loadingEmbed = new EmbedBuilder()
+                        .setTitle(`🍈 Processing Batch ${batch}/${batches}`)
+                        .setDescription(`Processing ${currentBatchSize} summons...`)
+                        .setColor(RARITY_COLORS.legendary)
+                        .addFields({
+                            name: '📊 Progress',
+                            value: `Batch ${batch} of ${batches} • ${allResults.length}/${amount} completed`,
+                            inline: false
+                        })
+                        .setTimestamp();
+
+                    await interaction.editReply({
+                        embeds: [loadingEmbed],
+                        components: []
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+
+                const batchResult = await GachaService.performPulls(userId, currentBatchSize);
+                
+                if (batchResult.success && batchResult.results) {
+                    allResults.push(...batchResult.results);
+                }
+            }
+
+            if (allResults.length === 0) {
+                await interaction.editReply({
+                    content: '❌ Failed to perform mega summons!',
+                    components: []
+                });
+                return;
+            }
+
+            const pityInfo = await GachaService.getPityInfo(userId);
+            const resultEmbed = SummonAnimator.createResultSummary(
+                allResults.map(r => r.fruit),
+                allResults,
+                balance,
+                pityInfo,
+                allResults.some(r => r.pityUsed)
+            );
+
+            await interaction.editReply({
+                embeds: [resultEmbed],
+                components: []
+            });
+
+        } catch (error) {
+            console.error('Mega summon error:', error);
+            await interaction.editReply({
+                content: '❌ An error occurred during mega summoning!',
+                components: []
+            });
+        }
+    }
+};
