@@ -1,7 +1,87 @@
-// src/features/economy/commands/income.js - FIXED: Complete implementation with proper safety checks
+// src/features/economy/commands/income.js - EMERGENCY FIXED: Complete implementation with total interaction validation
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const EconomyService = require('../app/EconomyService');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
+
+// EMERGENCY VALIDATION FUNCTIONS
+function validateInteraction(interaction) {
+    // Level 1: Check if interaction exists
+    if (!interaction) {
+        console.error('EMERGENCY: Interaction is null/undefined');
+        return { valid: false, reason: 'null_interaction' };
+    }
+    
+    // Level 2: Check if interaction has basic structure
+    if (typeof interaction !== 'object') {
+        console.error('EMERGENCY: Interaction is not an object', { type: typeof interaction });
+        return { valid: false, reason: 'invalid_type' };
+    }
+    
+    // Level 3: Check if interaction has reply function
+    if (typeof interaction.reply !== 'function') {
+        console.error('EMERGENCY: Interaction missing reply function', {
+            hasReply: !!interaction.reply,
+            hasUser: !!interaction.user,
+            hasId: !!interaction.id,
+            keys: Object.keys(interaction)
+        });
+        return { valid: false, reason: 'missing_reply' };
+    }
+    
+    // Level 4: Check if interaction has user
+    if (!interaction.user) {
+        console.error('EMERGENCY: Interaction missing user', {
+            id: interaction.id,
+            type: interaction.type,
+            commandName: interaction.commandName,
+            hasUser: !!interaction.user
+        });
+        return { valid: false, reason: 'missing_user' };
+    }
+    
+    // Level 5: Check if user has id
+    if (!interaction.user.id) {
+        console.error('EMERGENCY: User missing id', {
+            user: interaction.user,
+            userId: interaction.user.id
+        });
+        return { valid: false, reason: 'missing_user_id' };
+    }
+    
+    return { valid: true };
+}
+
+async function emergencySafeReply(interaction, content, ephemeral = true) {
+    try {
+        const options = {
+            content: content,
+            flags: ephemeral ? 64 : undefined // MessageFlags.Ephemeral = 64
+        };
+        
+        // Try multiple reply methods in order of preference
+        if (typeof interaction.reply === 'function') {
+            await interaction.reply(options);
+            return true;
+        }
+        
+        if (typeof interaction.followUp === 'function') {
+            await interaction.followUp(options);
+            return true;
+        }
+        
+        if (typeof interaction.editReply === 'function') {
+            await interaction.editReply({ content: content });
+            return true;
+        }
+        
+        console.error('EMERGENCY: No reply method available on interaction');
+        return false;
+        
+    } catch (error) {
+        console.error('EMERGENCY: All reply methods failed:', error.message);
+        return false;
+    }
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -12,31 +92,19 @@ module.exports = {
     cooldown: 3,
     
     async execute(interaction) {
-        // CRITICAL: Validate interaction and user first
-        if (!interaction) {
-            console.error('CRITICAL: Interaction is undefined');
-            return;
-        }
-        
-        if (!interaction.user) {
-            console.error('CRITICAL: interaction.user is undefined', {
-                interactionId: interaction.id,
-                type: interaction.type,
-                commandName: interaction.commandName
-            });
+        // EMERGENCY: Complete interaction validation
+        const validation = validateInteraction(interaction);
+        if (!validation.valid) {
+            console.error(`EMERGENCY: Invalid interaction - ${validation.reason}`);
             
-            try {
-                await interaction.reply({
-                    content: '❌ User identification failed. Please try the command again.',
-                    flags: MessageFlags.Ephemeral
-                });
-            } catch (error) {
-                console.error('Failed to send error response:', error);
+            // Try to send error response only if we have basic interaction structure
+            if (validation.reason !== 'null_interaction' && validation.reason !== 'invalid_type') {
+                await emergencySafeReply(interaction, '❌ System error: Invalid interaction. Please try again.', true);
             }
             return;
         }
         
-        // Safe user ID extraction  
+        // Safe user ID extraction (now guaranteed to exist)
         const userId = interaction.user.id;
         const username = interaction.user.username || 'Unknown';
         const guildId = interaction.guildId || interaction.guild?.id || null;
@@ -164,18 +232,25 @@ module.exports = {
             await interaction.reply({ embeds: [embed] });
             
         } catch (error) {
-            interaction.client.logger.error('Income command error:', error);
+            console.error('Income command error:', error);
             
-            if (error.message === 'Insufficient berries') {
-                await interaction.reply({
-                    content: '❌ An unexpected error occurred with your balance.',
-                    flags: MessageFlags.Ephemeral
-                });
-            } else {
-                await interaction.reply({
-                    content: '❌ An error occurred while processing your income.',
-                    flags: MessageFlags.Ephemeral
-                });
+            const errorMessage = '❌ An error occurred while processing your income.';
+            
+            try {
+                if (error.message === 'Insufficient berries') {
+                    await interaction.reply({
+                        content: '❌ An unexpected error occurred with your balance.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                } else {
+                    await interaction.reply({
+                        content: errorMessage,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+            } catch (replyError) {
+                console.error('Failed to send error response:', replyError);
+                await emergencySafeReply(interaction, errorMessage, true);
             }
         }
     }
