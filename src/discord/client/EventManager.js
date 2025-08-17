@@ -1,18 +1,15 @@
 // src/discord/client/EventManager.js
-// Loads and wires Discord client events from both core and feature modules.
-// Compatible with the new folder structure and tolerant of different export shapes.
+// Loads Discord events from both core and features. Backward-compatible with loadEvents().
 
 const path = require('path');
 const fs = require('fs').promises;
 
-// Shared logger/config (new locations)
 let LoggerMod;
 try { LoggerMod = require('../../shared/utils/Logger'); } catch { LoggerMod = null; }
 let ConfigMod;
 try { ConfigMod = require('../../shared/config/Config'); } catch { ConfigMod = {}; }
 
 function getLogger(scope = 'EventManager') {
-  // Try a few common logger shapes; fall back to console
   if (!LoggerMod) return console;
   try {
     if (typeof LoggerMod === 'function') return new LoggerMod(scope);
@@ -28,16 +25,16 @@ class EventManager {
     this.client = client;
     this.logger = getLogger('EventManager');
     this.loadedEvents = [];
-
-    // Scan both the discord-level events and feature-scoped events
     this.eventsPaths = [
       path.join(process.cwd(), 'src', 'discord', 'events'),
       path.join(process.cwd(), 'src', 'features'),
     ];
   }
 
-  async register() { return this.initialize(); } // alias
-  async load() { return this.initialize(); }     // alias
+  // Back-compat names
+  async register() { return this.initialize(); }
+  async load() { return this.initialize(); }
+  async loadEvents() { return this.initialize(); }
 
   async initialize() {
     const files = await this.collectEventFiles();
@@ -76,17 +73,11 @@ class EventManager {
   }
 
   async loadEvent(filePath, category) {
-    // Clear require cache to allow reloads during dev
-    try {
-      delete require.cache[require.resolve(filePath)];
-    } catch {}
-
+    try { delete require.cache[require.resolve(filePath)]; } catch {}
     const mod = require(filePath);
     const exported = mod && mod.default ? mod.default : mod;
 
-    // Normalize to a common shape
     let name, once = false, handler;
-
     if (exported && typeof exported === 'object' && (exported.execute || exported.run)) {
       name = exported.name || this.deriveNameFromFilename(filePath);
       once = Boolean(exported.once);
@@ -98,38 +89,27 @@ class EventManager {
       this.logger.warn?.(`Skipping ${filePath} (no recognizable export).`) || console.warn(`Skipping ${filePath} (no recognizable export).`);
       return null;
     }
-
     if (!name) name = this.deriveNameFromFilename(filePath);
 
-    // Attach to Discord client
     const wrapped = (...args) => {
       const ctx = { config: ConfigMod || {}, logger: this.logger, category, filePath };
       try {
-        // Prefer the modern shape: execute({ client, ctx }, ...args)
-        if (handler.length >= 1) {
-          return handler({ client: this.client, ctx }, ...args);
-        }
-        // Fallback: execute(client, ...args)
+        if (handler.length >= 1) return handler({ client: this.client, ctx }, ...args);
         return handler(this.client, ...args);
       } catch (err) {
         this.logger.error?.(`Error in event "${name}" (${filePath}):`, err) || console.error(`Error in event "${name}" (${filePath}):`, err);
       }
     };
 
-    if (once) {
-      this.client.once(name, wrapped);
-    } else {
-      this.client.on(name, wrapped);
-    }
+    if (once) this.client.once(name, wrapped);
+    else this.client.on(name, wrapped);
 
     this.logger.info?.(`Registered ${category} event: ${name}`) || console.log(`Registered ${category} event: ${name}`);
     return { name, category, filePath, once };
   }
 
   deriveNameFromFilename(filePath) {
-    const base = path.basename(filePath, '.js');
-    // Common event file names already match Discord event names (e.g., ready, interactionCreate)
-    return base;
+    return path.basename(filePath, '.js');
   }
 }
 
