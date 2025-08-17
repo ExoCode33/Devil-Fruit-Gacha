@@ -1,0 +1,40 @@
+{
+  "name": "one-piece-gacha-bot",
+  "version": "4.0.0",
+  "description": "Professional One Piece Devil Fruit Gacha Discord Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest",
+    "lint": "eslint src/",
+    "migrate": "node scripts/migrate.js",
+    "deploy-commands": "node scripts/deploy-commands.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "one-piece",
+    "gacha",
+    "devil-fruit"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@discordjs/rest": "^2.2.0",
+    "discord-api-types": "^0.37.66",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "node-cache": "^5.1.2",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "discord": {
+    "token": null,
+    "clientId": null,
+    "guildId": null
+  },
+  "database": {
+    "url": null,
+    "ssl": true,
+    "pool": {
+      "min": 2,
+      "max": 20,
+      "acquireTimeoutMillis": 60000,
+      "createTimeoutMillis": 30000,
+      "destroyTimeoutMillis": 5000,
+      "idleTimeoutMillis": 30000
+    }
+  },
+  "game": {
+    "pullCost": 1000,
+    "baseIncome": 50,
+    "incomeRate": 0.1,
+    "manualIncomeMultiplier": 6,
+    "manualIncomeCooldown": 60,
+    "autoIncomeInterval": 10,
+    "maxStoredHours": 24
+  },
+  "performance": {
+    "commandCooldown": 3000,
+    "rateLimit": {
+      "window": 60000,
+      "max": 30
+    },
+    "cacheSize": 1000,
+    "cacheTTL": 300000
+  },
+  "logging": {
+    "level": "info",
+    "console": true,
+    "file": false,
+    "filePath": "./logs",
+    "maxFiles": 14,
+    "maxSize": "20m"
+  },
+  "monitoring": {
+    "enabled": true,
+    "interval": 30000,
+    "alertThresholds": {
+      "memory": 512,
+      "cpu": 80,
+      "latency": 300
+    }
+  },
+  "security": {
+    "adminUsers": [],
+    "moderatorRoles": [],
+    "rateLimitBypass": []
+  },
+  "development": {
+    "hotReload": false,
+    "debugMode": false,
+    "testMode": false,
+    "mockData": false
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "logging": {
+    "level": "info",
+    "console": true,
+    "file": false
+  },
+  "monitoring": {
+    "enabled": true,
+    "interval": 60000,
+    "alertThresholds": {
+      "memory": 256,
+      "cpu": 90,
+      "latency": 500
+    }
+  },
+  "development": {
+    "hotReload": false,
+    "debugMode": false,
+    "testMode": false,
+    "mockData": false
+  },
+  "performance": {
+    "commandCooldown": 2000,
+    "rateLimit": {
+      "window": 60000,
+      "max": 50
+    }
+  }
+}
