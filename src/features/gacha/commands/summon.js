@@ -1,4 +1,4 @@
-// src/features/gacha/commands/summon.js - FIXED: Corrected import paths and simplified
+// src/features/gacha/commands/summon.js - FIXED: Complete implementation with proper imports
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const GachaService = require('../app/GachaService');
 const EconomyService = require('../../economy/app/EconomyService');
@@ -10,12 +10,12 @@ const PULL_COST = Constants.PULL_COST || 1000;
 const RARITY_COLORS = Constants.RARITY_COLORS;
 const RARITY_EMOJIS = Constants.RARITY_EMOJIS;
 
-// Import reveal utils safely
-let GachaRevealUtils = null;
+// Try to import Devil Fruits data
+let DEVIL_FRUITS = {};
 try {
-    GachaRevealUtils = require('../ui/GachaRevealUtils');
+    DEVIL_FRUITS = require('../data/DevilFruits');
 } catch (error) {
-    console.warn('GachaRevealUtils not found, using fallback reveals');
+    console.warn('DevilFruits data not found, using fallback system');
 }
 
 // Animation Configuration
@@ -149,6 +149,9 @@ module.exports = {
         const userId = interaction.user.id;
         
         try {
+            // Ensure user exists
+            await DatabaseManager.ensureUser(userId, interaction.user.username, interaction.guildId);
+            
             // Get user's current balance and pity info
             const balance = await EconomyService.getBalance(userId);
             const pityInfo = await GachaService.getPityInfo(userId);
