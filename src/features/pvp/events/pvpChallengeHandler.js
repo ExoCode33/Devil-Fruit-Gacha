@@ -1,56 +1,96 @@
-// src/features/pvp/events/pvpChallengeHandler.js
-// Handles PvP challenge button/select interactions.
-
+// src/features/pvp/events/pvpChallengeHandler.js - CLEAN: PvP Challenge Handler
 const Logger = require('../../../shared/utils/Logger');
-const Config = require('../../../shared/config/Config');
-const { pool } = require('../../../shared/db/DatabaseManager');
-const Constants = require('../../../shared/constants/Constants');
-// Cross-feature data/services
-const DevilFruitSkills = require('../../gacha/data/DevilFruitSkills');
-let SkillEffectService;
-try { SkillEffectService = require('../../combat/app/SkillEffectService'); } catch {}
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
-const logger = (typeof Logger === 'function') ? new Logger('pvpChallengeHandler') : (Logger?.child ? Logger.child('pvpChallengeHandler') : console);
+const logger = new Logger('PVP_HANDLER');
 
 module.exports = {
-  name: 'interactionCreate',
-  once: false,
+    name: 'interactionCreate',
+    once: false,
 
-  /**
-   * @param {{ client: import('discord.js').Client, ctx: any }} param0
-   * @param {import('discord.js').Interaction} interaction
-   */
-  async execute({ client, ctx }, interaction) {
-    try {
-      if (!interaction || !interaction.isButton || !interaction.isButton()) return;
-      const id = interaction.customId || '';
-      if (!id.startsWith('pvp:')) return; // not a PvP interaction
-
-      // Example: pvp:accept:<raidId>
-      const parts = id.split(':');
-      const action = parts[1] || 'unknown';
-      const raidId = parts[2] || null;
-
-      if (action === 'accept') {
+    async execute({ client }, interaction) {
         try {
-          if (pool?.query) {
-            await pool.query('UPDATE raids SET accepted = true WHERE id = $1', [raidId]);
-          }
-        } catch (e) { logger.warn?.('DB update failed', e); }
+            // Only handle PvP button interactions
+            if (!interaction.isButton() || !interaction.customId.startsWith('pvp:')) {
+                return;
+            }
 
-        try { await interaction.reply({ content: '✅ Challenge accepted!', ephemeral: true }); } catch {}
-        return;
-      }
+            const [, action, raidId] = interaction.customId.split(':');
+            const userId = interaction.user.id;
 
-      if (action === 'decline') {
-        try { await interaction.reply({ content: '❌ Challenge declined.', ephemeral: true }); } catch {}
-        return;
-      }
+            logger.info(`PvP action: ${action} for raid ${raidId} by ${interaction.user.tag}`);
 
-      try { await interaction.reply({ content: '🤔 Unknown PvP action.', ephemeral: true }); } catch {}
-    } catch (err) {
-      logger.error?.('pvpChallengeHandler error:', err) || console.error('pvpChallengeHandler error:', err);
-      try { await interaction.reply({ content: '❌ Something went wrong.', ephemeral: true }); } catch {}
+            switch (action) {
+                case 'accept':
+                    await this.handleAccept(interaction, raidId, userId);
+                    break;
+                    
+                case 'decline':
+                    await this.handleDecline(interaction, raidId, userId);
+                    break;
+                    
+                default:
+                    await interaction.reply({
+                        content: `❓ Unknown PvP action: ${action}`,
+                        ephemeral: true
+                    });
+            }
+
+        } catch (error) {
+            logger.error('PvP handler error:', error);
+            
+            const errorMessage = {
+                content: '❌ An error occurred processing your PvP action.',
+                ephemeral: true
+            };
+
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage);
+            } else {
+                await interaction.reply(errorMessage);
+            }
+        }
+    },
+
+    async handleAccept(interaction, raidId, userId) {
+        try {
+            // Update raid status
+            await DatabaseManager.query(
+                'UPDATE raids SET status = $1, accepted_at = NOW(), defender_id = $2 WHERE id = $3',
+                ['accepted', userId, raidId]
+            );
+
+            await interaction.reply({
+                content: `✅ **${interaction.user.username}** accepted the PvP challenge!`,
+                ephemeral: false
+            });
+
+            logger.info(`Challenge ${raidId} accepted by ${interaction.user.tag}`);
+
+        } catch (error) {
+            logger.error('Error accepting challenge:', error);
+            throw error;
+        }
+    },
+
+    async handleDecline(interaction, raidId, userId) {
+        try {
+            // Update raid status
+            await DatabaseManager.query(
+                'UPDATE raids SET status = $1, declined_at = NOW(), declined_by = $2 WHERE id = $3',
+                ['declined', userId, raidId]
+            );
+
+            await interaction.reply({
+                content: `❌ **${interaction.user.username}** declined the PvP challenge.`,
+                ephemeral: false
+            });
+
+            logger.info(`Challenge ${raidId} declined by ${interaction.user.tag}`);
+
+        } catch (error) {
+            logger.error('Error declining challenge:', error);
+            throw error;
+        }
     }
-  }
 };
