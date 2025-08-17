@@ -1,7 +1,7 @@
-// src/services/EconomyService.js - FIXED: New Income System Based on Devil Fruits Count
-const DatabaseManager = require('../database/DatabaseManager');
-const Logger = require('../utils/Logger');
-const Config = require('../config/Config');
+// src/features/economy/app/EconomyService.js - FIXED: Correct import paths
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
+const Logger = require('../../../shared/utils/Logger');
+const Config = require('../../../shared/config/Config');
 
 class EconomyService {
     constructor() {
@@ -64,10 +64,7 @@ class EconomyService {
     }
 
     /**
-     * FIXED: Calculate income based on devil fruits count (NOT CP)
-     * - 0 fruits = 0 income per hour
-     * - 5+ fruits = 6,250 berries per hour (flat rate)
-     * - Less than 5 fruits = proportional income
+     * Calculate income based on devil fruits count
      */
     async calculateIncome(userId) {
         try {
@@ -75,7 +72,6 @@ class EconomyService {
             const fruits = await DatabaseManager.getUserDevilFruits(userId);
             const fruitCount = fruits?.length || 0;
             
-            // FIXED: New income calculation based on fruit count
             let hourlyIncome = 0;
             
             if (fruitCount === 0) {
@@ -90,14 +86,14 @@ class EconomyService {
                 hourlyIncome = Math.floor((baseIncome / 5) * fruitCount);
             }
             
-            // Convert to per-10-minute periods (income is calculated every 10 minutes)
+            // Convert to per-10-minute periods
             const perPeriodIncome = Math.floor(hourlyIncome / 6);
 
             return {
                 fruitCount,
                 hourlyIncome,
                 perPeriodIncome,
-                total: perPeriodIncome // For compatibility
+                total: perPeriodIncome
             };
         } catch (error) {
             this.logger.error(`Failed to calculate income for ${userId}:`, error);
@@ -111,7 +107,7 @@ class EconomyService {
     }
 
     /**
-     * FIXED: Process automatic income based on fruit count
+     * Process automatic income based on fruit count
      */
     async processAutomaticIncome(userId) {
         try {
@@ -129,7 +125,7 @@ class EconomyService {
 
             const maxHours = Config.game.maxStoredHours || 24;
             const effectiveHours = Math.min(hoursSinceLastIncome, maxHours);
-            const periods = Math.floor(effectiveHours * 6); // 6 periods per hour (10 min each)
+            const periods = Math.floor(effectiveHours * 6); // 6 periods per hour
 
             const incomeData = await this.calculateIncome(userId);
             const totalIncome = incomeData.perPeriodIncome * periods;
@@ -154,7 +150,7 @@ class EconomyService {
     }
 
     /**
-     * FIXED: Process manual income with fruit-based calculation
+     * Process manual income with fruit-based calculation
      */
     async processManualIncome(userId) {
         const lastManual = this.incomeCache.get(userId);
@@ -199,8 +195,6 @@ class EconomyService {
         }
     }
 
-
-
     /**
      * Transfer berries between users
      */
@@ -218,25 +212,6 @@ class EconomyService {
         } catch (error) {
             this.logger.error('Transfer failed:', error);
             throw error;
-        }
-    }
-
-    /**
-     * Get top berry balances
-     */
-    async getTopBalances(limit = 10) {
-        try {
-            const result = await DatabaseManager.query(`
-                SELECT user_id, username, berries, total_earned, total_spent
-                FROM users
-                ORDER BY berries DESC
-                LIMIT $1
-            `, [limit]);
-
-            return result.rows;
-        } catch (error) {
-            this.logger.error('Failed to get top balances:', error);
-            return [];
         }
     }
 
@@ -301,19 +276,7 @@ class EconomyService {
     }
 
     /**
-     * Format berry amount for display
-     */
-    formatBerries(amount) {
-        if (amount >= 1000000) {
-            return `${(amount / 1000000).toFixed(1)}M`;
-        } else if (amount >= 1000) {
-            return `${(amount / 1000).toFixed(1)}K`;
-        }
-        return amount.toLocaleString();
-    }
-
-    /**
-     * FIXED: Get income display info for commands
+     * Get income display info for commands
      */
     async getIncomeDisplayInfo(userId) {
         try {
