@@ -1,6 +1,7 @@
 // src/discord/client/CommandManager.js
 // Scans and loads commands from src/features/**/commands, exposes them on client,
 // and can optionally register slash commands via REST. Collision-safe variable names.
+// Backward-compatible: provides loadCommands() alias to initialize().
 
 const nodePath = require('path');
 const fsp = require('fs').promises;
@@ -48,6 +49,11 @@ class CommandManager {
     // Scan base(s) for commands in the new structure
     this.scanBases = [ nodePath.join(process.cwd(), 'src', 'features') ];
   }
+
+  // Backward-compat aliases
+  async register() { return this.initialize(); }
+  async load() { return this.initialize(); }
+  async loadCommands() { return this.initialize(); }
 
   async initialize() {
     const files = await this.getCommandFiles();
