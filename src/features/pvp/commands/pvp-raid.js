@@ -1,4 +1,4 @@
-// src/commands/slash/pvp/pvp-raid.js - FIXED: NaN Values and HP Calculations
+// src/features/pvp/commands/pvp-raid.js - FIXED: NaN Values and HP Calculations
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
 const { getSkillData } = require('../../gacha/data/DevilFruitSkills');
