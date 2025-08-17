@@ -19,13 +19,13 @@ const path = require('path');
 const fs = require('fs');
 
 // Core modules
-const Logger = require('./src/utils/Logger');
-const Config = require('./src/config/Config');
-const DatabaseManager = require('./src/database/DatabaseManager');
-const EventManager = require('./src/events/EventManager');
-const CommandManager = require('./src/commands/CommandManager');
-const SystemMonitor = require('./src/utils/SystemMonitor');
-const ErrorHandler = require('./src/utils/ErrorHandler');
+const Logger = require('./src/shared/utils/Logger');
+const Config = require('./src/shared/config/Config');
+const DatabaseManager = require('./src/shared/db/DatabaseManager');
+const EventManager = require('./src/discord/client/EventManager');
+const CommandManager = require('./src/discord/client/CommandManager');
+const SystemMonitor = require('./src/shared/utils/SystemMonitor');
+const ErrorHandler = require('./src/shared/utils/ErrorHandler');
 
 class OnePieceGachaBot {
     constructor() {
