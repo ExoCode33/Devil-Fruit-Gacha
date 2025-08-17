@@ -247,7 +247,7 @@ module.exports = {
         const guildId = interaction.guildId || interaction.guild?.id || null;
         
         try {
-            await DatabaseManager.ensureUser(userId, username, guildId);
+            await DatabaseManager.safeEnsureUser(userId, username, guildId);
             
             const balance = await EconomyService.getBalance(userId);
             const pityInfo = await GachaService.getPityInfo(userId);
