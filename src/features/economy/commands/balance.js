@@ -1,7 +1,7 @@
-// src/commands/slash/economy/balance.js - UPDATED: New Income System Display
+// src/features/economy/commands/balance.js - FIXED: Correct import paths
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const EconomyService = require('../../../services/EconomyService');
-const DatabaseManager = require('../../../database/DatabaseManager');
+const EconomyService = require('../app/EconomyService');
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -21,7 +21,7 @@ module.exports = {
         const userId = targetUser.id;
         
         try {
-            // Ensure user exists (now automatically gives starting berries)
+            // Ensure user exists
             await DatabaseManager.ensureUser(userId, targetUser.username, interaction.guildId);
             
             // Get user data
@@ -65,7 +65,7 @@ module.exports = {
                     }
                 );
 
-            // UPDATED: New income display based on fruit count
+            // Income display based on fruit count
             if (incomeDisplayInfo.fruitCount === 0) {
                 embed.addFields({
                     name: '💵 Income Status',
@@ -100,7 +100,7 @@ module.exports = {
                 });
             }
 
-            // UPDATED: New footer message
+            // Footer message
             let footerText = '/income to collect berries • /summon to get Devil Fruits';
             if (incomeDisplayInfo.fruitCount === 0) {
                 footerText = '🍈 Get Devil Fruits with /summon to start earning income!';
