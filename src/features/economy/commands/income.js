@@ -1,5 +1,5 @@
-// src/features/economy/commands/income.js - FIXED: Correct import paths
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+// src/features/economy/commands/income.js - FIXED: Complete implementation with proper safety checks
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const EconomyService = require('../app/EconomyService');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
@@ -12,11 +12,38 @@ module.exports = {
     cooldown: 3,
     
     async execute(interaction) {
+        // CRITICAL: Validate interaction and user first
+        if (!interaction) {
+            console.error('CRITICAL: Interaction is undefined');
+            return;
+        }
+        
+        if (!interaction.user) {
+            console.error('CRITICAL: interaction.user is undefined', {
+                interactionId: interaction.id,
+                type: interaction.type,
+                commandName: interaction.commandName
+            });
+            
+            try {
+                await interaction.reply({
+                    content: '❌ User identification failed. Please try the command again.',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (error) {
+                console.error('Failed to send error response:', error);
+            }
+            return;
+        }
+        
+        // Safe user ID extraction  
         const userId = interaction.user.id;
+        const username = interaction.user.username || 'Unknown';
+        const guildId = interaction.guildId || interaction.guild?.id || null;
         
         try {
             // Ensure user exists
-            await DatabaseManager.ensureUser(userId, interaction.user.username, interaction.guildId);
+            await DatabaseManager.ensureUser(userId, username, guildId);
             
             // Process automatic income first
             const automaticIncome = await EconomyService.processAutomaticIncome(userId);
@@ -40,7 +67,10 @@ module.exports = {
                         })
                         .setFooter({ text: 'Manual income has a higher multiplier but requires waiting!' });
                     
-                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                    return interaction.reply({ 
+                        embeds: [embed], 
+                        flags: MessageFlags.Ephemeral 
+                    });
                 }
                 
                 // Error - likely no Devil Fruits
@@ -59,13 +89,16 @@ module.exports = {
                         })
                         .setFooter({ text: 'Start your pirate journey by summoning Devil Fruits!' });
                     
-                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                    return interaction.reply({ 
+                        embeds: [embed], 
+                        flags: MessageFlags.Ephemeral 
+                    });
                 }
                 
                 // Other error
                 return interaction.reply({
                     content: `❌ Failed to process income: ${manualResult.error || 'Unknown error'}`,
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
             
@@ -136,12 +169,12 @@ module.exports = {
             if (error.message === 'Insufficient berries') {
                 await interaction.reply({
                     content: '❌ An unexpected error occurred with your balance.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             } else {
                 await interaction.reply({
                     content: '❌ An error occurred while processing your income.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         }
