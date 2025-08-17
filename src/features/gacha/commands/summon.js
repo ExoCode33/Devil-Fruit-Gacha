@@ -1,4 +1,4 @@
-// src/features/gacha/commands/summon.js - FIXED: Complete implementation with proper safety checks
+// src/features/gacha/commands/summon.js - EMERGENCY FIXED: Complete implementation with total interaction validation
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const GachaService = require('../app/GachaService');
 const EconomyService = require('../../economy/app/EconomyService');
@@ -24,6 +24,89 @@ const ANIMATION_CONFIG = {
     QUICK_DELAY: 500,
     RAINBOW_DELAY: 300
 };
+
+// EMERGENCY VALIDATION FUNCTIONS
+function validateInteraction(interaction) {
+    // Level 1: Check if interaction exists
+    if (!interaction) {
+        console.error('EMERGENCY: Interaction is null/undefined');
+        return { valid: false, reason: 'null_interaction' };
+    }
+    
+    // Level 2: Check if interaction has basic structure
+    if (typeof interaction !== 'object') {
+        console.error('EMERGENCY: Interaction is not an object', { type: typeof interaction });
+        return { valid: false, reason: 'invalid_type' };
+    }
+    
+    // Level 3: Check if interaction has reply function
+    if (typeof interaction.reply !== 'function') {
+        console.error('EMERGENCY: Interaction missing reply function', {
+            hasReply: !!interaction.reply,
+            hasUser: !!interaction.user,
+            hasId: !!interaction.id,
+            keys: Object.keys(interaction)
+        });
+        return { valid: false, reason: 'missing_reply' };
+    }
+    
+    // Level 4: Check if interaction has user
+    if (!interaction.user) {
+        console.error('EMERGENCY: Interaction missing user', {
+            id: interaction.id,
+            type: interaction.type,
+            commandName: interaction.commandName,
+            hasUser: !!interaction.user
+        });
+        return { valid: false, reason: 'missing_user' };
+    }
+    
+    // Level 5: Check if user has id
+    if (!interaction.user.id) {
+        console.error('EMERGENCY: User missing id', {
+            user: interaction.user,
+            userId: interaction.user.id
+        });
+        return { valid: false, reason: 'missing_user_id' };
+    }
+    
+    return { valid: true };
+}
+
+async function emergencySafeReply(interaction, content) {
+    try {
+        // Try multiple reply methods in order of preference
+        if (typeof interaction.reply === 'function') {
+            await interaction.reply({
+                content: content,
+                flags: 64 // MessageFlags.Ephemeral
+            });
+            return true;
+        }
+        
+        if (typeof interaction.followUp === 'function') {
+            await interaction.followUp({
+                content: content,
+                flags: 64
+            });
+            return true;
+        }
+        
+        if (typeof interaction.editReply === 'function') {
+            await interaction.editReply({
+                content: content
+            });
+            return true;
+        }
+        
+        console.error('EMERGENCY: No reply method available on interaction');
+        return false;
+        
+    } catch (error) {
+        console.error('EMERGENCY: All reply methods failed:', error.message);
+        return false;
+    }
+}
 
 class SummonAnimator {
     static getRainbowPattern(frame, length = 20) {
@@ -146,31 +229,19 @@ module.exports = {
     cooldown: 5,
     
     async execute(interaction) {
-        // CRITICAL: Validate interaction and user first
-        if (!interaction) {
-            console.error('CRITICAL: Interaction is undefined');
-            return;
-        }
-        
-        if (!interaction.user) {
-            console.error('CRITICAL: interaction.user is undefined', {
-                interactionId: interaction.id,
-                type: interaction.type,
-                commandName: interaction.commandName
-            });
+        // EMERGENCY: Complete interaction validation
+        const validation = validateInteraction(interaction);
+        if (!validation.valid) {
+            console.error(`EMERGENCY: Invalid interaction - ${validation.reason}`);
             
-            try {
-                await interaction.reply({
-                    content: '❌ User identification failed. Please try the command again.',
-                    flags: MessageFlags.Ephemeral
-                });
-            } catch (error) {
-                console.error('Failed to send error response:', error);
+            // Try to send error response only if we have basic interaction structure
+            if (validation.reason !== 'null_interaction' && validation.reason !== 'invalid_type') {
+                await emergencySafeReply(interaction, '❌ System error: Invalid interaction. Please try again.');
             }
             return;
         }
         
-        // Safe user ID extraction
+        // Safe user ID extraction (now guaranteed to exist)
         const userId = interaction.user.id;
         const username = interaction.user.username || 'Unknown';
         const guildId = interaction.guildId || interaction.guild?.id || null;
@@ -196,17 +267,25 @@ module.exports = {
             await this.setupMenuCollector(interaction);
             
         } catch (error) {
-            interaction.client.logger.error('Summon command error:', error);
+            console.error('Summon command error:', error);
             
-            const errorMessage = {
-                content: '❌ An error occurred while opening the summon menu.',
-                flags: MessageFlags.Ephemeral
-            };
+            const errorMessage = '❌ An error occurred while opening the summon menu.';
             
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(errorMessage);
-            } else {
-                await interaction.reply(errorMessage);
+            try {
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp({
+                        content: errorMessage,
+                        flags: MessageFlags.Ephemeral
+                    });
+                } else {
+                    await interaction.reply({
+                        content: errorMessage,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+            } catch (replyError) {
+                console.error('Failed to send error response:', replyError);
+                await emergencySafeReply(interaction, errorMessage);
             }
         }
     },
@@ -394,11 +473,18 @@ module.exports = {
         
         const collector = message.createMessageComponentCollector({ 
             time: 300000, // 5 minutes
-            filter: (i) => i.user.id === userId
+            filter: (i) => i.user?.id === userId
         });
         
         collector.on('collect', async (i) => {
             try {
+                // Validate sub-interaction
+                const validation = validateInteraction(i);
+                if (!validation.valid) {
+                    console.error(`Sub-interaction invalid: ${validation.reason}`);
+                    return;
+                }
+                
                 if (i.customId.startsWith('summon_amount_')) {
                     await this.handleAmountSelection(i, userSelections);
                 } else if (i.customId.startsWith('summon_animation_')) {
@@ -414,10 +500,7 @@ module.exports = {
                 }
             } catch (error) {
                 console.error('Menu collector error:', error);
-                await i.reply({
-                    content: '❌ An error occurred processing your selection.',
-                    flags: MessageFlags.Ephemeral
-                });
+                await emergencySafeReply(i, '❌ An error occurred processing your selection.');
             }
         });
         
@@ -478,10 +561,7 @@ module.exports = {
         const selections = userSelections.get(userId);
         
         if (!selections || !selections.amount || !selections.animation) {
-            await interaction.reply({
-                content: '❌ Please make both amount and animation selections first!',
-                flags: MessageFlags.Ephemeral
-            });
+            await emergencySafeReply(interaction, '❌ Please make both amount and animation selections first!');
             return;
         }
         
