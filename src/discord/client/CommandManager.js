@@ -1,12 +1,10 @@
 // src/discord/client/CommandManager.js
 // Scans and loads commands from src/features/**/commands, exposes them on client,
-// and can optionally register slash commands via REST. Collision-safe variable names.
-// Backward-compatible: provides loadCommands() alias to initialize().
+// can register slash commands via REST, and is backward-compatible (loadCommands()).
 
 const nodePath = require('path');
 const fsp = require('fs').promises;
 
-// Shared modules (new locations), wrapped to avoid hard crashes
 let LoggerMod, RateLimiterMod, InteractionHandlerMod, ConfigMod;
 try { LoggerMod = require('../../shared/utils/Logger'); } catch {}
 try { RateLimiterMod = require('../../shared/utils/RateLimiter'); } catch {}
@@ -29,7 +27,7 @@ class CommandManager {
     this.client = client;
     this.logger = getLogger('CommandManager');
     this.commands = new Map();
-    this.cooldowns = new Map(); // Map<commandName, Map<userId, timestamp>>
+    this.cooldowns = new Map();
     this.rateLimiter = null;
 
     const cfg = (ConfigMod && ConfigMod.default) ? ConfigMod.default : ConfigMod;
@@ -46,11 +44,10 @@ class CommandManager {
       this.rateLimiter = null;
     }
 
-    // Scan base(s) for commands in the new structure
     this.scanBases = [ nodePath.join(process.cwd(), 'src', 'features') ];
   }
 
-  // Backward-compat aliases
+  // Back-compat aliases
   async register() { return this.initialize(); }
   async load() { return this.initialize(); }
   async loadCommands() { return this.initialize(); }
@@ -63,11 +60,8 @@ class CommandManager {
         this.logger.error?.('Failed to load command from', filePath, err) || console.error('Failed to load command from', filePath, err);
       }
     }
-
-    // expose on client
     this.client.commands = this.commands;
     this.client.commandManager = this;
-
     this.logger.info?.(`Loaded ${this.commands.size} command(s).`) || console.log(`Loaded ${this.commands.size} command(s).`);
     return this.commands;
   }
@@ -90,13 +84,10 @@ class CommandManager {
   }
 
   async loadCommand(filePath) {
-    // Clear cache for dev reload
     try { delete require.cache[require.resolve(filePath)]; } catch {}
-
     const mod = require(filePath);
     const exported = mod && mod.default ? mod.default : mod;
 
-    // Normalize
     let data, execute, name;
     if (exported && typeof exported === 'object') {
       data = exported.data || exported.command || null;
@@ -105,7 +96,6 @@ class CommandManager {
       execute = exported;
       data = { name: this.deriveNameFromFilename(filePath) };
     }
-
     if (!data) data = { name: this.deriveNameFromFilename(filePath) };
     name = data?.name || this.deriveNameFromFilename(filePath);
 
@@ -114,10 +104,7 @@ class CommandManager {
       return null;
     }
 
-    // Wrap with cooldown + rate limit if available
     const wrapped = this.wrapExecutor(name, execute, filePath);
-
-    // Store
     this.commands.set(name, { name, data, execute: wrapped, rawExecute: execute, filePath });
     this.logger.info?.(`Registered command: /${name}`) || console.log(`Registered command: /${name}`);
     return this.commands.get(name);
@@ -128,7 +115,6 @@ class CommandManager {
       const interaction = context?.interaction || context;
       const userId = interaction?.user?.id || context?.userId || 'unknown';
 
-      // Rate limit
       if (this.rateLimiter && typeof this.rateLimiter.consume === 'function') {
         try { await this.rateLimiter.consume(userId); }
         catch (e) {
@@ -138,7 +124,6 @@ class CommandManager {
         }
       }
 
-      // Cooldown per command
       const now = Date.now();
       let bucket = this.cooldowns.get(name);
       if (!bucket) { bucket = new Map(); this.cooldowns.set(name, bucket); }
@@ -151,15 +136,11 @@ class CommandManager {
       }
       bucket.set(userId, now);
 
-      // Run command
       try {
         const logger = getLogger(`cmd:${name}`);
         const cfg = (ConfigMod && ConfigMod.default) ? ConfigMod.default : ConfigMod;
         const ctx = { client: this.client, logger, config: cfg, filePath };
 
-        // Execute supports two common shapes:
-        // 1) execute({ interaction, client, ctx })
-        // 2) execute(interaction, client, ctx)
         if (execute.length >= 1) {
           return await execute({ interaction, client: this.client, ctx });
         }
@@ -173,10 +154,9 @@ class CommandManager {
 
   deriveNameFromFilename(filePath) {
     const base = nodePath.basename(filePath, '.js');
-    return base; // keep dashes intact, e.g., pvp-raid-history
+    return base;
   }
 
-  // Optional: register slash commands with Discord REST.
   async registerSlashCommands() {
     const token = process.env.DISCORD_TOKEN;
     const appId = process.env.CLIENT_ID || process.env.DISCORD_CLIENT_ID;
@@ -196,10 +176,7 @@ class CommandManager {
     let REST = null, Routes = null;
     try {
       const dj = require('discord.js');
-      if (dj?.REST && dj?.Routes) {
-        REST = dj.REST;
-        Routes = dj.Routes;
-      }
+      if (dj?.REST && dj?.Routes) { REST = dj.REST; Routes = dj.Routes; }
     } catch {}
 
     if (!REST || !Routes) {
