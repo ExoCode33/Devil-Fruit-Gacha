@@ -45,12 +45,10 @@ module.exports = {
         if (InteractionHandler && typeof InteractionHandler.handle === 'function') {
           return await InteractionHandler.handle({ interaction, client, ctx });
         }
-        // Fallback: no-op
         return;
       }
     } catch (err) {
       logger.error?.('interactionCreate error:', err) || console.error('interactionCreate error:', err);
-      // Shared error handler preferred
       if (ErrorHandler && typeof ErrorHandler.notify === 'function') {
         try { await ErrorHandler.notify(err, { where: 'interactionCreate', interaction }); } catch {}
       }
