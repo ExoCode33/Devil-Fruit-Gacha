@@ -1,23 +1,38 @@
-// src/features/economy/commands/income.js - EMERGENCY FIXED: Complete implementation with total interaction validation
+// src/features/economy/commands/income.js - FINAL FIXED: Complete implementation handling wrapped interactions
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const EconomyService = require('../app/EconomyService');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
-// EMERGENCY VALIDATION FUNCTIONS
-function validateInteraction(interaction) {
-    // Level 1: Check if interaction exists
-    if (!interaction) {
-        console.error('EMERGENCY: Interaction is null/undefined');
-        return { valid: false, reason: 'null_interaction' };
+// FINAL VALIDATION FUNCTIONS - HANDLES WRAPPED INTERACTIONS
+function validateInteraction(interactionWrapper) {
+    // Level 0: Check if we have a wrapper object
+    if (!interactionWrapper) {
+        console.error('EMERGENCY: InteractionWrapper is null/undefined');
+        return { valid: false, reason: 'null_wrapper', interaction: null };
     }
     
-    // Level 2: Check if interaction has basic structure
+    // Level 1: Extract actual interaction from wrapper
+    let interaction = interactionWrapper;
+    
+    // Check if this is a wrapped interaction (from CommandManager)
+    if (interactionWrapper.interaction && typeof interactionWrapper.interaction === 'object') {
+        interaction = interactionWrapper.interaction;
+        console.log('DETECTED: Wrapped interaction from CommandManager');
+    }
+    
+    // Level 2: Check if interaction exists
+    if (!interaction) {
+        console.error('EMERGENCY: Interaction is null/undefined after unwrapping');
+        return { valid: false, reason: 'null_interaction', interaction: null };
+    }
+    
+    // Level 3: Check if interaction has basic structure
     if (typeof interaction !== 'object') {
         console.error('EMERGENCY: Interaction is not an object', { type: typeof interaction });
-        return { valid: false, reason: 'invalid_type' };
+        return { valid: false, reason: 'invalid_type', interaction: null };
     }
     
-    // Level 3: Check if interaction has reply function
+    // Level 4: Check if interaction has reply function
     if (typeof interaction.reply !== 'function') {
         console.error('EMERGENCY: Interaction missing reply function', {
             hasReply: !!interaction.reply,
@@ -25,10 +40,10 @@ function validateInteraction(interaction) {
             hasId: !!interaction.id,
             keys: Object.keys(interaction)
         });
-        return { valid: false, reason: 'missing_reply' };
+        return { valid: false, reason: 'missing_reply', interaction: null };
     }
     
-    // Level 4: Check if interaction has user
+    // Level 5: Check if interaction has user
     if (!interaction.user) {
         console.error('EMERGENCY: Interaction missing user', {
             id: interaction.id,
@@ -36,19 +51,19 @@ function validateInteraction(interaction) {
             commandName: interaction.commandName,
             hasUser: !!interaction.user
         });
-        return { valid: false, reason: 'missing_user' };
+        return { valid: false, reason: 'missing_user', interaction: null };
     }
     
-    // Level 5: Check if user has id
+    // Level 6: Check if user has id
     if (!interaction.user.id) {
         console.error('EMERGENCY: User missing id', {
             user: interaction.user,
             userId: interaction.user.id
         });
-        return { valid: false, reason: 'missing_user_id' };
+        return { valid: false, reason: 'missing_user_id', interaction: null };
     }
     
-    return { valid: true };
+    return { valid: true, interaction: interaction };
 }
 
 async function emergencySafeReply(interaction, content, ephemeral = true) {
@@ -91,18 +106,21 @@ module.exports = {
     category: 'economy',
     cooldown: 3,
     
-    async execute(interaction) {
-        // EMERGENCY: Complete interaction validation
-        const validation = validateInteraction(interaction);
+    async execute(interactionWrapper) {
+        // FINAL: Complete interaction validation with wrapper handling
+        const validation = validateInteraction(interactionWrapper);
         if (!validation.valid) {
             console.error(`EMERGENCY: Invalid interaction - ${validation.reason}`);
             
             // Try to send error response only if we have basic interaction structure
-            if (validation.reason !== 'null_interaction' && validation.reason !== 'invalid_type') {
-                await emergencySafeReply(interaction, '❌ System error: Invalid interaction. Please try again.', true);
+            if (validation.interaction && validation.reason !== 'null_wrapper' && validation.reason !== 'null_interaction') {
+                await emergencySafeReply(validation.interaction, '❌ System error: Invalid interaction. Please try again.', true);
             }
             return;
         }
+        
+        // Extract the actual interaction
+        const interaction = validation.interaction;
         
         // Safe user ID extraction (now guaranteed to exist)
         const userId = interaction.user.id;
