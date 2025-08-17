@@ -1,7 +1,7 @@
-// src/commands/slash/economy/income.js - UPDATED: New Fruit-Based Income System
+// src/features/economy/commands/income.js - FIXED: Correct import paths
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const EconomyService = require('../../../services/EconomyService');
-const DatabaseManager = require('../../../database/DatabaseManager');
+const EconomyService = require('../app/EconomyService');
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -15,7 +15,7 @@ module.exports = {
         const userId = interaction.user.id;
         
         try {
-            // Ensure user exists (now automatically gives starting berries)
+            // Ensure user exists
             await DatabaseManager.ensureUser(userId, interaction.user.username, interaction.guildId);
             
             // Process automatic income first
