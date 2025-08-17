@@ -1,5 +1,5 @@
-// src/features/gacha/commands/summon.js - FIXED: Complete implementation with proper imports
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+// src/features/gacha/commands/summon.js - FIXED: Complete implementation with proper safety checks
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const GachaService = require('../app/GachaService');
 const EconomyService = require('../../economy/app/EconomyService');
 const DatabaseManager = require('../../../shared/db/DatabaseManager');
@@ -146,11 +146,38 @@ module.exports = {
     cooldown: 5,
     
     async execute(interaction) {
+        // CRITICAL: Validate interaction and user first
+        if (!interaction) {
+            console.error('CRITICAL: Interaction is undefined');
+            return;
+        }
+        
+        if (!interaction.user) {
+            console.error('CRITICAL: interaction.user is undefined', {
+                interactionId: interaction.id,
+                type: interaction.type,
+                commandName: interaction.commandName
+            });
+            
+            try {
+                await interaction.reply({
+                    content: '❌ User identification failed. Please try the command again.',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (error) {
+                console.error('Failed to send error response:', error);
+            }
+            return;
+        }
+        
+        // Safe user ID extraction
         const userId = interaction.user.id;
+        const username = interaction.user.username || 'Unknown';
+        const guildId = interaction.guildId || interaction.guild?.id || null;
         
         try {
             // Ensure user exists
-            await DatabaseManager.ensureUser(userId, interaction.user.username, interaction.guildId);
+            await DatabaseManager.ensureUser(userId, username, guildId);
             
             // Get user's current balance and pity info
             const balance = await EconomyService.getBalance(userId);
@@ -173,7 +200,7 @@ module.exports = {
             
             const errorMessage = {
                 content: '❌ An error occurred while opening the summon menu.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             };
             
             if (interaction.replied || interaction.deferred) {
@@ -389,7 +416,7 @@ module.exports = {
                 console.error('Menu collector error:', error);
                 await i.reply({
                     content: '❌ An error occurred processing your selection.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         });
@@ -453,7 +480,7 @@ module.exports = {
         if (!selections || !selections.amount || !selections.animation) {
             await interaction.reply({
                 content: '❌ Please make both amount and animation selections first!',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
@@ -536,7 +563,7 @@ module.exports = {
         
         await interaction.reply({
             embeds: [incomeEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     },
 
@@ -781,7 +808,7 @@ module.exports = {
                     {
                         name: '📊 Fruit Information',
                         value: [
-                            `📊 **Status:** ${statusText}`,
+                            `${statusText}`,
                             `🔮 **Type:** ${displayFruit.type}`,
                             `💪 **CP Multiplier:** x${displayFruit.multiplier.toFixed(1)}`,
                             `🎯 **Description:** ${displayFruit.description}`
