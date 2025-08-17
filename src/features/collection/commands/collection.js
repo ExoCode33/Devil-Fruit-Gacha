@@ -1,8 +1,7 @@
-// src/commands/slash/collection/collection.js - Devil Fruit Collection Command
+// src/features/collection/commands/collection.js - FIXED: Correct import paths
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const DatabaseManager = require('../../../database/DatabaseManager');
-const { DEVIL_FRUITS } = require('../../../data/DevilFruits');
-const { RARITY_COLORS, RARITY_EMOJIS, PAGINATION } = require('../../../data/Constants');
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
+const { RARITY_COLORS, RARITY_EMOJIS, PAGINATION } = require('../../../shared/constants/Constants');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -37,6 +36,9 @@ module.exports = {
         const userId = targetUser.id;
         
         try {
+            // Ensure user exists
+            await DatabaseManager.ensureUser(userId, targetUser.username, interaction.guildId);
+            
             // Get user's devil fruits
             let fruits = await DatabaseManager.getUserDevilFruits(userId);
             
@@ -145,26 +147,15 @@ module.exports = {
                 }
                 
                 // Add fruits for this page
-                pageFruits.forEach((fruit, index) => {
-                    // Get actual fruit data for skill information
-                    const actualFruit = Object.values(DEVIL_FRUITS).find(f => 
-                        f.name === fruit.fruit_name || f.id === fruit.fruit_id
-                    );
-                    
+                pageFruits.forEach((fruit) => {
                     const rarityEmoji = RARITY_EMOJIS[fruit.fruit_rarity] || '⚪';
                     const multiplier = (fruit.base_cp / 100).toFixed(1);
                     const countText = fruit.count > 1 ? ` (x${fruit.count})` : '';
-                    
-                    // PvP ability info
-                    const skillName = actualFruit?.skill?.name || 'Unknown Ability';
-                    const skillDamage = actualFruit?.skill?.damage || 50;
-                    const skillCooldown = actualFruit?.skill?.cooldown || 2;
                     
                     const fieldValue = 
                         `**Type:** ${fruit.fruit_type}\n` +
                         `**CP Multiplier:** x${multiplier}\n` +
                         `**Description:** ${fruit.fruit_description}\n` +
-                        `**Ability:** ${skillName} (${skillDamage} DMG, ${skillCooldown}s CD)\n` +
                         `**Total CP:** ${fruit.total_cp?.toLocaleString() || 'N/A'}`;
                     
                     embed.addFields({
