@@ -1,9 +1,9 @@
 // src/commands/slash/pvp/pvp-raid.js - FIXED: NaN Values and HP Calculations
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
-const DatabaseManager = require('../../../database/DatabaseManager');
-const { getSkillData } = require('../../../data/DevilFruitSkills');
-const SkillEffectService = require('../../../services/SkillEffectService');
-const { RARITY_COLORS, RARITY_EMOJIS } = require('../../../data/Constants');
+const DatabaseManager = require('../../../shared/db/DatabaseManager');
+const { getSkillData } = require('../../gacha/data/DevilFruitSkills');
+const SkillEffectService = require('../../combat/app/SkillEffectService');
+const { RARITY_COLORS, RARITY_EMOJIS } = require('../../../shared/constants/Constants');
 
 // FIXED: Enhanced raid configuration with proper damage balance
 const RAID_CONFIG = {
@@ -417,7 +417,21 @@ async function executeAttack(raidState, skillChoice, targetFruitIndex) {
 function createEnhancedBattleEmbed(raidState, selectedSkill = null) {
     const { attacker, defender, turn } = raidState;
     
-    const embed = 
+    const embed = new EmbedBuilder()
+      .setTitle('🎮 Battle')
+      .setDescription(`Turn ${turn || 1}`)
+      .setColor(0x2b2d31);
+    try {
+      const left = (attacker?.team && attacker.team[0]) || attacker?.front || attacker || {};
+      const right = (defender?.team && defender.team[0]) || defender?.front || defender || {};
+      embed.addFields(
+        { name: 'Attacker', value: `${left.name || '—'}\n${_hpBar(left)}`, inline: true },
+        { name: 'Defender', value: `${right.name || '—'}\n${_hpBar(right)}`, inline: true }
+      );
+    } catch {}
+    return embed;
+}
+
 // ===== Cinematic UI (non-invasive) =====
 const RAID_ANIM = { enabled: true, delayMs: 900 };
 
