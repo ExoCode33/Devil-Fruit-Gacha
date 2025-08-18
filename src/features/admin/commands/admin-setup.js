@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('setup-admin')
+        .setName('admin-setup')
         .setDescription('🔧 Get setup instructions for admin commands')
         .addBooleanOption(option =>
             option.setName('show_server_users')
