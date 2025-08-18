@@ -112,7 +112,7 @@ module.exports = {
             
             if (!adminUsers.includes(userId)) {
                 return await interaction.reply({ 
-                    content: `❌ You need Administrator permissions to use this command!\n\nYour ID: \`${userId}\`\nAdmin Users: \`${adminUsers}\`\n\n💡 Use \`/setup-admin\` to get setup instructions.`, 
+                    content: `❌ You need Administrator permissions to use this command!\n\nYour ID: \`${userId}\`\nAdmin Users: \`${adminUsers}\`\n\n💡 Use \`/admin-setup\` to get setup instructions.`, 
                     ephemeral: true 
                 });
             }
